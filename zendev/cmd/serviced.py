@@ -214,6 +214,52 @@ class Serviced(object):
                 if svc["Context"].get(key, None):
                     svc["Context"][key]=""
 
+
+    def inject_debug_over_ssh(self, services, svc):
+        """
+        Add an ability to remotely debug processes inside containers over SSH.
+
+        First step is to install & launch openssh-server on container start.
+        Since openssh-server requires host keys on start, these are going to
+        be generated just before sshd launch.
+
+        Second - add an endpoint to access the openssh-server from dev-hosts.
+        """
+        target_services = ['Zope', 'zenpython', 'zenmodeler', 'zenjobs']
+
+        command_wrapper = '''bash -c 'yum install -y openssh-server; 
+        ssh-keygen -q -t rsa  -f /etc/ssh/ssh_host_rsa_key -N "" -C "" > /dev/null;
+        /usr/sbin/sshd -D' & %s'''
+
+        name = svc.get('Name')
+        if not all([name, name in target_services]):
+            return
+
+        original_startup = svc.get('Command')
+        if original_startup is None:
+            return
+
+        ssh_port = 2330 + target_services.index(name)
+
+        endpoint_json = '''{{
+            "Name": "{name}",
+            "Purpose": "export",
+            "Protocol": "tcp",
+            "PortNumber": 22,
+            "Application": "{name}_debug",
+            "ApplicationTemplate": "{name}_debug",
+            "AddressConfig": {{
+                "Port": {port},
+                "Protocol": "tcp"
+            }}
+        }}
+        '''.format(name=name, port=ssh_port)
+
+        svc['Command'] = command_wrapper % original_startup
+        svc['Endpoints'].append(json.loads(endpoint_json))
+
+        info("{} SSH endpoint is available on {}".format(name, ssh_port))
+
     def walk_services(self, services, visitor):
         if not services:
             return
@@ -291,6 +337,7 @@ class Serviced(object):
         self.walk_services(compiled['Services'], self.remove_otsdb_bigtable)
 
         self.walk_services(compiled['Services'], self.remove_auth0_vars)
+        self.walk_services(compiled['Services'], self.inject_debug_over_ssh)
 
 
 
