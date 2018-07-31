@@ -225,7 +225,7 @@ class Serviced(object):
 
         Second - add an endpoint to access the openssh-server from dev-hosts.
         """
-        target_services = ['Zope', 'zenpython', 'zenmodeler', 'zenjobs']
+        target_services = ['Zope', 'zenhub']
 
         command_wrapper = '''bash -c 'yum install -y openssh-server; 
         ssh-keygen -q -t rsa  -f /etc/ssh/ssh_host_rsa_key -N "" -C "" > /dev/null;
